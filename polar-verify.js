@@ -1,29 +1,31 @@
 const express = require("express");
-const fetch = require("node-fetch");
-
 const router = express.Router();
-const POLAR_SECRET = process.env.POLAR_SECRET;
 
 router.get("/polar/verify", async (req, res) => {
 
   try {
 
+    const auth = req.headers.authorization;
+    if (!auth) return res.json({ active:false });
+
+    const token = auth.replace("Bearer ", "");
+
     const r = await fetch(
       "https://api.polar.sh/v1/customers/me/subscriptions",
       {
         headers: {
-          "Authorization": `Bearer ${POLAR_SECRET}`
+          "Authorization": "Bearer " + token
         }
       }
     );
 
     const subs = await r.json();
 
-    if (!subs.length) {
+    if (!subs.data || !subs.data.length) {
       return res.json({ active:false });
     }
 
-    const sub = subs[0];
+    const sub = subs.data[0];
 
     res.json({
       active: sub.status === "active",
@@ -31,6 +33,7 @@ router.get("/polar/verify", async (req, res) => {
     });
 
   } catch(e) {
+    console.log("Polar verify error", e);
     res.json({ active:false });
   }
 
