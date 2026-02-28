@@ -1,7 +1,7 @@
 const express = require("express");
-
-const fetch = require("node-fetch");
 const router = express.Router();
+
+const fetch = (...args) => import("node-fetch").then(({default: fetch}) => fetch(...args));
 
 const POLAR_API = "https://api.polar.sh";
 const POLAR_SECRET = process.env.POLAR_SECRET;
@@ -62,4 +62,4 @@ router.get("/me", async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
