@@ -36,4 +36,4 @@ router.get("/polar/verify", async (req, res) => {
 
 });
 
-export default router;
+module.exports = router;
