@@ -3,10 +3,12 @@ const fs = require("fs");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const polarRoutes = require("./polar");
+const polarVerify = require("./polar-verify");
 
 
 const app = express();
 const polarSuccess = require("./polar-success");
+app.use("/", polarVerify);
 app.use("/", polarSuccess);
 app.use(cors());
 app.use("/", polarRoutes);
