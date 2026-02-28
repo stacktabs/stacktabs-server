@@ -2,9 +2,11 @@ const express = require("express");
 const fs = require("fs");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const polarRoutes = require("./polar");
 
 const app = express();
 app.use(cors());
+app.use("/", polarRoutes);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
