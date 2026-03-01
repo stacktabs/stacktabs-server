@@ -1,108 +1,132 @@
 const express = require("express");
 const fs = require("fs");
-const bodyParser = require("body-parser");
 const cors = require("cors");
-const polarRoutes = require("./polar");
-const polarVerify = require("./polar-verify");
-
 
 const app = express();
-const polarSuccess = require("./polar-success");
-app.use("/", polarVerify);
-app.use("/", polarSuccess);
-app.use(cors());
-app.use("/", polarRoutes);
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-
 const PORT = 3000;
 
-/* ---------------- STORAGE ---------------- */
+/* ======================================================
+   IMPORTANT: BODY PARSER MUST BE FIRST (POLAR WEBHOOK)
+====================================================== */
+app.use(cors());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+/* ======================================================
+   SIMPLE FILE DATABASE
+====================================================== */
 
 const DB_FILE = "./licenses.json";
 
+/* create safe db */
 function loadDB() {
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({ licenses: {} }, null, 2));
+  try {
+    if (!fs.existsSync(DB_FILE)) {
+      return { deviceLicenses: {} };
+    }
+    const raw = fs.readFileSync(DB_FILE);
+    const parsed = JSON.parse(raw);
+
+    if (!parsed.deviceLicenses) parsed.deviceLicenses = {};
+    return parsed;
+
+  } catch (e) {
+    console.log("DB reset due to corruption");
+    return { deviceLicenses: {} };
   }
-  return JSON.parse(fs.readFileSync(DB_FILE));
 }
 
 function saveDB(db) {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
 
-function getLicenses() {
-  const db = loadDB();
-  if (!db.deviceLicenses) db.deviceLicenses = {};
-  return db;
-}
-/* ---------------- GUMROAD WEBHOOK ---------------- */
+/* ======================================================
+   DEVICE LICENSE CHECK  (EXTENSION CALLS THIS)
+====================================================== */
 
-/*
-Gumroad sends POST here AFTER real payment
-*/
-app.post("/gumroad-webhook", (req, res) => {
-  try {
-    const sale = req.body;
+app.get("/license/check", (req, res) => {
 
-    // Gumroad sends purchaser email
-    const email = sale.email;
-    const saleId = sale.sale_id;
+  const device = req.query.device;
 
-    if (!email || !saleId) {
-      return res.status(400).send("Invalid webhook");
-    }
-
-    const db = loadDB();
-
-    // 30 days license
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-
-    db.licenses[email] = {
-      saleId,
-      expiresAt
-    };
-
-    saveDB(db);
-
-    console.log("✅ Payment verified for:", email);
-
-    res.status(200).send("ok");
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("server error");
+  if (!device) {
+    return res.json({ active: false });
   }
-});
-
-/* ---------------- LICENSE CHECK ---------------- */
-
-/*
-Extension will call this to verify user
-*/
-app.get("/check", (req, res) => {
-  const email = req.query.email;
-  if (!email) return res.json({ valid: false });
 
   const db = loadDB();
-
-  const record = db.licenses[email];
+  const record = db.deviceLicenses[device];
 
   if (!record) {
-    return res.json({ valid: false });
+    return res.json({ active: false });
   }
 
+  /* expired subscription */
   if (Date.now() > record.expiresAt) {
-    delete db.licenses[email];
+    delete db.deviceLicenses[device];
     saveDB(db);
-    return res.json({ valid: false });
+    return res.json({ active: false });
   }
 
-  res.json({
-    valid: true,
+  return res.json({
+    active: true,
     expiresAt: record.expiresAt
   });
 });
+
+/* ======================================================
+   POLAR WEBHOOK (THIS ACTIVATES PRO)
+====================================================== */
+
+app.post("/polar/webhook", (req, res) => {
+
+  try {
+    const event = req.body;
+
+    console.log("Polar event received:", event.type);
+
+    /* subscription purchased OR renewed */
+    if (event.type === "checkout.completed") {
+
+      /* VERY IMPORTANT — correct metadata field */
+      const device = event.data.metadata_device;
+
+      if (!device) {
+        console.log("No device metadata in checkout");
+        return res.sendStatus(200);
+      }
+
+      const db = loadDB();
+
+      /* subscription duration = 30 days */
+      const expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+
+      db.deviceLicenses[device] = {
+        expiresAt
+      };
+
+      saveDB(db);
+
+      console.log("✅ PRO ACTIVATED for device:", device);
+    }
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.error("Webhook error:", err);
+    res.sendStatus(500);
+  }
+});
+
+/* ======================================================
+   HEALTH CHECK (Render requires this)
+====================================================== */
+
+app.get("/", (req, res) => {
+  res.send("StackTabs License Server Running");
+});
+
+/* ======================================================
+   START SERVER
+====================================================== */
 
 app.listen(PORT, () => {
   console.log("StackTabs license server running on port", PORT);
