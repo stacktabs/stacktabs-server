@@ -32,6 +32,11 @@ function saveDB(db) {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
 
+function getLicenses() {
+  const db = loadDB();
+  if (!db.deviceLicenses) db.deviceLicenses = {};
+  return db;
+}
 /* ---------------- GUMROAD WEBHOOK ---------------- */
 
 /*
