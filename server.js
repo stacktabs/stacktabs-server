@@ -59,29 +59,28 @@ app.post("/polar/webhook", (req, res) => {
     const event = req.body;
 
     /* Polar successful payment event */
-    if (event.type === "checkout.completed") {
+    if (event.type === "subscription.active") {
 
       const device = event.data.metadata.device;
-
+    
       if (!device) {
-        console.log("No device metadata");
+        console.log("No device metadata received");
         return res.sendStatus(200);
       }
-
+    
       const db = loadDB();
-
-      /* subscription expiry (monthly default) */
+    
+      /* real subscription expiry from Polar */
       let expiresAt = Date.now() + (30*24*60*60*1000);
-
-      /* if Polar provides subscription end date */
-      if (event.data.subscription && event.data.subscription.current_period_end) {
-        expiresAt = new Date(event.data.subscription.current_period_end).getTime();
+    
+      if (event.data.current_period_end) {
+        expiresAt = new Date(event.data.current_period_end).getTime();
       }
-
+    
       db.deviceLicenses[device] = { expiresAt };
       saveDB(db);
-
-      console.log("PRO ACTIVATED FOR DEVICE:", device);
+    
+      console.log("PRO ACTIVATED:", device);
     }
 
     res.sendStatus(200);
