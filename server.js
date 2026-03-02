@@ -3,131 +3,107 @@ const fs = require("fs");
 const cors = require("cors");
 
 const app = express();
-const PORT = 3000;
-
-/* ======================================================
-   IMPORTANT: BODY PARSER MUST BE FIRST (POLAR WEBHOOK)
-====================================================== */
+app.use(express.json());
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
 
-/* ======================================================
-   SIMPLE FILE DATABASE
-====================================================== */
+/* ---------------- HEALTH ROUTE (CRITICAL FOR RENDER) ---------------- */
+app.get("/", (req, res) => {
+  res.send("StackTabs License Server Running");
+});
+
+/* ---------------- DATABASE ---------------- */
 
 const DB_FILE = "./licenses.json";
 
-/* create safe db */
 function loadDB() {
-  try {
-    if (!fs.existsSync(DB_FILE)) {
-      return { deviceLicenses: {} };
-    }
-    const raw = fs.readFileSync(DB_FILE);
-    const parsed = JSON.parse(raw);
-
-    if (!parsed.deviceLicenses) parsed.deviceLicenses = {};
-    return parsed;
-
-  } catch (e) {
-    console.log("DB reset due to corruption");
-    return { deviceLicenses: {} };
+  if (!fs.existsSync(DB_FILE)) {
+    fs.writeFileSync(DB_FILE, JSON.stringify({ deviceLicenses:{} }, null, 2));
   }
+  return JSON.parse(fs.readFileSync(DB_FILE));
 }
 
 function saveDB(db) {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
 
-/* ======================================================
-   DEVICE LICENSE CHECK  (EXTENSION CALLS THIS)
-====================================================== */
+/* ================= LICENSE CHECK ================= */
 
 app.get("/license/check", (req, res) => {
 
   const device = req.query.device;
-
-  if (!device) {
-    return res.json({ active: false });
-  }
+  if (!device) return res.json({ active:false });
 
   const db = loadDB();
   const record = db.deviceLicenses[device];
 
-  if (!record) {
-    return res.json({ active: false });
-  }
+  if (!record) return res.json({ active:false });
 
-  /* expired subscription */
   if (Date.now() > record.expiresAt) {
     delete db.deviceLicenses[device];
     saveDB(db);
-    return res.json({ active: false });
+    return res.json({ active:false });
   }
 
-  return res.json({
-    active: true,
-    expiresAt: record.expiresAt
+  res.json({
+    active:true,
+    expiresAt:record.expiresAt
   });
 });
 
-/* ======================================================
-   POLAR WEBHOOK (THIS ACTIVATES PRO)
-====================================================== */
+/* ================= POLAR WEBHOOK (MOST IMPORTANT PART) ================= */
 
 app.post("/polar/webhook", (req, res) => {
 
   try {
+
     const event = req.body;
 
-    console.log("Polar event received:", event.type);
-
-    /* subscription purchased OR renewed */
+    /* Polar successful payment event */
     if (event.type === "checkout.completed") {
 
-      /* VERY IMPORTANT — correct metadata field */
-      const device = event.data.metadata_device;
+      const device = event.data.metadata.device;
 
       if (!device) {
-        console.log("No device metadata in checkout");
+        console.log("No device metadata");
         return res.sendStatus(200);
       }
 
       const db = loadDB();
 
-      /* subscription duration = 30 days */
-      const expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+      /* subscription expiry (monthly default) */
+      let expiresAt = Date.now() + (30*24*60*60*1000);
 
-      db.deviceLicenses[device] = {
-        expiresAt
-      };
+      /* if Polar provides subscription end date */
+      if (event.data.subscription && event.data.subscription.current_period_end) {
+        expiresAt = new Date(event.data.subscription.current_period_end).getTime();
+      }
 
+      db.deviceLicenses[device] = { expiresAt };
       saveDB(db);
 
-      console.log("✅ PRO ACTIVATED for device:", device);
+      console.log("PRO ACTIVATED FOR DEVICE:", device);
     }
 
     res.sendStatus(200);
 
-  } catch (err) {
-    console.error("Webhook error:", err);
+  } catch(e) {
+    console.log("Webhook error:", e);
     res.sendStatus(500);
   }
 });
 
-/* ======================================================
-   HEALTH CHECK (Render requires this)
-====================================================== */
+/* ---------------- SUCCESS PAGE ---------------- */
 
-app.get("/", (req, res) => {
-  res.send("StackTabs License Server Running");
+app.get("/polar/success", (req, res) => {
+  res.send(`
+    <html>
+      <body style="font-family:sans-serif;text-align:center;margin-top:80px;">
+        <h2>Payment Successful ✓</h2>
+        <p>You can close this tab and return to StackTabs.</p>
+      </body>
+    </html>
+  `);
 });
 
-/* ======================================================
-   START SERVER
-====================================================== */
-
-app.listen(PORT, () => {
-  console.log("StackTabs license server running on port", PORT);
-});
+const PORT = 3000;
+app.listen(PORT, () => console.log("StackTabs server running on port", PORT));
