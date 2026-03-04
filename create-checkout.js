@@ -1,11 +1,10 @@
 const express = require("express");
 const router = express.Router();
-
-const fetch = (...args) => import("node-fetch").then(({default: fetch}) => fetch(...args));
+const fetch = require("node-fetch");
 
 const POLAR_SECRET = process.env.POLAR_SECRET;
 
-/* This checkout link contains ALL plans */
+/* YOUR POLAR CHECKOUT LINK */
 const CHECKOUT_LINK = "polar_cl_g2hL2pi9scVGQGw8JAz36Fuvq2RMKYpFHejr23CzaZ5";
 
 router.get("/polar/create-checkout", async (req, res) => {
@@ -13,12 +12,12 @@ router.get("/polar/create-checkout", async (req, res) => {
   const device = req.query.device;
 
   if (!device) {
-    return res.status(400).send("Missing device");
+    return res.status(400).json({ error: "Missing device id" });
   }
 
   try {
 
-    const r = await fetch("https://api.polar.sh/v1/checkouts", {
+    const polarRes = await fetch("https://api.polar.sh/v1/checkouts", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${POLAR_SECRET}`,
@@ -32,15 +31,24 @@ router.get("/polar/create-checkout", async (req, res) => {
       })
     });
 
-    const data = await r.json();
+    const data = await polarRes.json();
+
+    if (!data.url) {
+      console.log("Polar error:", data);
+      return res.status(500).json({ error: "Polar checkout creation failed" });
+    }
 
     res.json({
       url: data.url
     });
 
-  } catch (e) {
-    console.log(e);
-    res.status(500).send("checkout error");
+  } catch (err) {
+
+    console.log("Checkout error:", err);
+
+    res.status(500).json({
+      error: "checkout error"
+    });
   }
 
 });
