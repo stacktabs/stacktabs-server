@@ -6,7 +6,7 @@ const fetch = (...args) => import("node-fetch").then(({default: fetch}) => fetch
 const POLAR_SECRET = process.env.POLAR_SECRET;
 
 /* This checkout link contains ALL plans */
-const CHECKOUT_LINK = "https://buy.polar.sh/polar_cl_g2hL2pi9scVGQGw8JAz36Fuvq2RMKYpFHejr23CzaZ5";
+const CHECKOUT_LINK = "polar_cl_g2hL2pi9scVGQGw8JAz36Fuvq2RMKYpFHejr23CzaZ5";
 
 router.get("/polar/create-checkout", async (req, res) => {
 
