@@ -1,13 +1,17 @@
 
 const express = require("express");
-const fs = require("fs");
 const cors = require("cors");
+const fs = require("fs");
+
 
 const app = express();
 const createCheckout = require("./create-checkout");
+app.use(cors({
+  origin: "*"
+}));
 app.use("/", createCheckout);
 app.use(express.json());
-app.use(cors());
+
 
 /* ---------------- HEALTH ROUTE (CRITICAL FOR RENDER) ---------------- */
 app.get("/", (req, res) => {
