@@ -1,3 +1,4 @@
+
 const express = require("express");
 const fs = require("fs");
 const cors = require("cors");
@@ -58,29 +59,34 @@ app.post("/polar/webhook", (req, res) => {
 
     const event = req.body;
 
-    /* Polar successful payment event */
+    console.log("POLAR EVENT TYPE:", event.type);
+    console.log("FULL EVENT:", JSON.stringify(event, null, 2));
+
     if (event.type === "subscription.active") {
 
-      const device = event.data.metadata.device;
-    
+      // try different metadata locations
+      let device =
+        event?.data?.metadata?.device ||
+        event?.data?.subscription?.metadata?.device ||
+        event?.metadata?.device;
+
       if (!device) {
         console.log("No device metadata received");
         return res.sendStatus(200);
       }
-    
+
       const db = loadDB();
-    
-      /* real subscription expiry from Polar */
+
       let expiresAt = Date.now() + (30*24*60*60*1000);
-    
-      if (event.data.current_period_end) {
+
+      if (event.data?.current_period_end) {
         expiresAt = new Date(event.data.current_period_end).getTime();
       }
-    
+
       db.deviceLicenses[device] = { expiresAt };
       saveDB(db);
-    
-      console.log("PRO ACTIVATED:", device);
+
+      console.log("PRO ACTIVATED DEVICE:", device);
     }
 
     res.sendStatus(200);
