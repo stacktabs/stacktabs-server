@@ -4,6 +4,8 @@ const fs = require("fs");
 const cors = require("cors");
 
 const app = express();
+const createCheckout = require("./create-checkout");
+app.use("/", createCheckout);
 app.use(express.json());
 app.use(cors());
 
