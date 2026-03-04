@@ -5,13 +5,15 @@ const fetch = (...args) => import("node-fetch").then(({default: fetch}) => fetch
 
 const POLAR_SECRET = process.env.POLAR_SECRET;
 
+/* This checkout link contains ALL plans */
+const CHECKOUT_LINK = "https://buy.polar.sh/polar_cl_g2hL2pi9scVGQGw8JAz36Fuvq2RMKYpFHejr23CzaZ5";
+
 router.get("/polar/create-checkout", async (req, res) => {
 
   const device = req.query.device;
-  const productId = req.query.product;
 
-  if (!device || !productId) {
-    return res.status(400).send("Missing device or product");
+  if (!device) {
+    return res.status(400).send("Missing device");
   }
 
   try {
@@ -23,7 +25,7 @@ router.get("/polar/create-checkout", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        product_id: productId,
+        checkout_link: CHECKOUT_LINK,
         metadata: {
           device: device
         }
@@ -40,6 +42,7 @@ router.get("/polar/create-checkout", async (req, res) => {
     console.log(e);
     res.status(500).send("checkout error");
   }
+
 });
 
 module.exports = router;
