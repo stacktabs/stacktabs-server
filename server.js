@@ -9,8 +9,9 @@ const createCheckout = require("./create-checkout");
 app.use(cors({
   origin: "*"
 }));
-app.use("/", createCheckout);
 app.use(express.json());
+app.use("/", createCheckout);
+
 
 
 /* ---------------- HEALTH ROUTE (CRITICAL FOR RENDER) ---------------- */
@@ -70,7 +71,6 @@ app.post("/polar/webhook", (req, res) => {
 
     if (event.type === "subscription.active") {
 
-      // try different metadata locations
       let device =
         event?.data?.metadata?.device ||
         event?.data?.metadata_device ||
