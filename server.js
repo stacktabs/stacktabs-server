@@ -73,8 +73,10 @@ app.post("/polar/webhook", (req, res) => {
       // try different metadata locations
       let device =
         event?.data?.metadata?.device ||
+        event?.data?.metadata_device ||
         event?.data?.subscription?.metadata?.device ||
-        event?.metadata?.device;
+        event?.metadata?.device ||
+        event?.metadata_device;
 
       if (!device) {
         console.log("No device metadata received");
