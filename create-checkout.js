@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const CHECKOUT_LINK =
-  "https://buy.polar.sh/polar_cl_g2hL2pi9scVGQGw8JAz36Fuvq2RMKYpFHejr23CzaZ5";
+  "https://buy.polar.sh/polar_cl_dRYWJwOVoWKCyN6KeeUKZYeT98wlVvMn7P9ED3tfxeu";
 
 router.get("/polar/create-checkout", (req, res) => {
 
@@ -15,9 +15,8 @@ router.get("/polar/create-checkout", (req, res) => {
   const url =
     CHECKOUT_LINK + "?metadata_device=" + encodeURIComponent(device);
 
-  res.json({
-    url: url
-  });
+  res.json({ url });
+
 });
 
 module.exports = router;
