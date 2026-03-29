@@ -6,14 +6,14 @@ const CHECKOUT_LINK =
 
 router.get("/polar/create-checkout", (req, res) => {
 
-  const device = req.query.device;
+  const email = req.query.email;
 
-  if (!device) {
-    return res.status(400).json({ error: "Missing device id" });
+  if (!email) {
+    return res.status(400).json({ error: "Missing email" });
   }
 
   const url =
-    CHECKOUT_LINK + "?metadata[device]=" + encodeURIComponent(device);
+    CHECKOUT_LINK + "?customer_email=" + encodeURIComponent(email);
 
   res.json({ url });
 
