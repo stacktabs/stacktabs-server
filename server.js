@@ -60,46 +60,65 @@ app.get("/license/check", (req, res) => {
 
 /* ================= POLAR WEBHOOK (MOST IMPORTANT PART) ================= */
 
+const crypto = require("crypto");
+
 app.post("/polar/webhook", (req, res) => {
 
   try {
 
+    const secret = "polar_whs_tyIMTDhm8oOu0LAsjlq9mIDUkHvDBt8tUwNvc1bOHJe";
+
+    const signature = req.headers["polar-signature"];
+    const body = JSON.stringify(req.body);
+
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(body)
+      .digest("hex");
+
+    if (signature !== expected) {
+      console.log("Invalid webhook signature");
+      return res.sendStatus(400);
+    }
+
     const event = req.body;
 
-    console.log("POLAR EVENT TYPE:", event.type);
-    console.log("FULL EVENT:", JSON.stringify(event, null, 2));
+    console.log("EVENT:", event.type);
 
-    if (event.type === "subscription.active") {
+    if (
+      event.type === "subscription.created" ||
+      event.type === "subscription.updated" ||
+      event.type === "subscription.active"
+    ) {
 
       let device =
         event?.data?.metadata?.device ||
         event?.data?.metadata_device ||
-        event?.data?.subscription?.metadata?.device ||
-        event?.metadata?.device ||
-        event?.metadata_device;
+        event?.metadata?.device;
 
       if (!device) {
-        console.log("No device metadata received");
+        console.log("No device found");
         return res.sendStatus(200);
       }
 
       const db = loadDB();
 
-      let expiresAt = Date.now() + (30*24*60*60*1000);
+      let expiresAt = Date.now();
 
       if (event.data?.current_period_end) {
         expiresAt = new Date(event.data.current_period_end).getTime();
       }
 
       db.deviceLicenses[device] = { expiresAt };
+
       saveDB(db);
 
-      console.log("PRO ACTIVATED DEVICE:", device);
+      console.log("PRO ACTIVATED:", device);
     }
 
     res.sendStatus(200);
 
-  } catch(e) {
+  } catch (e) {
     console.log("Webhook error:", e);
     res.sendStatus(500);
   }
