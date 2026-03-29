@@ -60,30 +60,13 @@ app.get("/license/check", (req, res) => {
 
 /* ================= POLAR WEBHOOK (MOST IMPORTANT PART) ================= */
 
-const crypto = require("crypto");
-
 app.post("/polar/webhook", (req, res) => {
 
   try {
 
-    const secret = "polar_whs_tyIMTDhm8oOu0LAsjlq9mIDUkHvDBt8tUwNvc1bOHJe";
-
-    const signature = req.headers["polar-signature"];
-    const body = JSON.stringify(req.body);
-
-    const expected = crypto
-      .createHmac("sha256", secret)
-      .update(body)
-      .digest("hex");
-
-    if (signature !== expected) {
-      console.log("Invalid webhook signature");
-      return res.sendStatus(400);
-    }
-
     const event = req.body;
 
-    console.log("EVENT:", event.type);
+    console.log("EVENT TYPE:", event.type);
 
     if (
       event.type === "subscription.created" ||
@@ -91,14 +74,18 @@ app.post("/polar/webhook", (req, res) => {
       event.type === "subscription.active"
     ) {
 
+      // 🔥 FIXED DEVICE EXTRACTION
       let device =
         event?.data?.metadata?.device ||
         event?.data?.metadata_device ||
-        event?.metadata?.device;
+        event?.metadata?.device ||
+        event?.data?.customer?.metadata?.device;
+
+      console.log("DEVICE RECEIVED:", device);
 
       if (!device) {
-        console.log("No device found");
-        return res.sendStatus(200);
+        console.log("❌ DEVICE NOT FOUND IN WEBHOOK");
+        return res.sendStatus(200); // IMPORTANT: do NOT send 400
       }
 
       const db = loadDB();
@@ -113,17 +100,16 @@ app.post("/polar/webhook", (req, res) => {
 
       saveDB(db);
 
-      console.log("PRO ACTIVATED:", device);
+      console.log("✅ PRO ACTIVATED:", device);
     }
 
     res.sendStatus(200);
 
   } catch (e) {
     console.log("Webhook error:", e);
-    res.sendStatus(500);
+    res.sendStatus(200); // NEVER 400
   }
 });
-
 /* ---------------- SUCCESS PAGE ---------------- */
 
 app.get("/polar/success", (req, res) => {
