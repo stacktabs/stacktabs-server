@@ -13,7 +13,7 @@ router.get("/polar/create-checkout", (req, res) => {
   }
 
   const url =
-    CHECKOUT_LINK + "?metadata_device=" + encodeURIComponent(device);
+    CHECKOUT_LINK + "?metadata[device]=" + encodeURIComponent(device);
 
   res.json({ url });
 
