@@ -110,6 +110,21 @@ app.post("/polar/webhook", (req, res) => {
     res.sendStatus(200); // NEVER 400
   }
 });
+
+app.post("/save-device", (req, res) => {
+
+  const { device_id, email } = req.body;
+
+  const db = loadDB();
+
+  db.emailToDevice = db.emailToDevice || {};
+  db.emailToDevice[email] = device_id;
+
+  saveDB(db);
+
+  res.json({ ok: true });
+});
+
 /* ---------------- SUCCESS PAGE ---------------- */
 
 app.get("/polar/success", (req, res) => {
