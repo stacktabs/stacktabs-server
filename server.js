@@ -74,21 +74,20 @@ app.post("/polar/webhook", (req, res) => {
       event.type === "subscription.active"
     ) {
 
-      // 🔥 FIXED DEVICE EXTRACTION
-      let device =
-        event?.data?.metadata?.device ||
-        event?.data?.metadata_device ||
-        event?.metadata?.device ||
-        event?.data?.customer?.metadata?.device;
-
-      console.log("DEVICE RECEIVED:", device);
-
-      if (!device) {
-        console.log("❌ DEVICE NOT FOUND IN WEBHOOK");
-        return res.sendStatus(200); // IMPORTANT: do NOT send 400
-      }
+      // ✅ NEW LOGIC HERE
+      const email = event?.data?.customer?.email;
 
       const db = loadDB();
+
+      const device = db.emailToDevice?.[email];
+
+      console.log("EMAIL:", email);
+      console.log("DEVICE FROM DB:", device);
+
+      if (!device) {
+        console.log("❌ DEVICE NOT FOUND FROM EMAIL");
+        return res.sendStatus(200);
+      }
 
       let expiresAt = Date.now();
 
@@ -107,7 +106,7 @@ app.post("/polar/webhook", (req, res) => {
 
   } catch (e) {
     console.log("Webhook error:", e);
-    res.sendStatus(200); // NEVER 400
+    res.sendStatus(200);
   }
 });
 
