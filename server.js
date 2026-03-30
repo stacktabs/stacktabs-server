@@ -114,6 +114,8 @@ app.post("/save-device", (req, res) => {
 
   const { device_id, email } = req.body;
 
+  console.log("SAVING DEVICE:", device_id, email);
+
   const db = loadDB();
 
   db.emailToDevice = db.emailToDevice || {};
