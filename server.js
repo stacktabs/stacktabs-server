@@ -139,9 +139,19 @@ app.get("/polar/success", (req, res) => {
   `);
 });
 
-app.get("/debug/db", (req, res) => {
+
+app.get("/debug/expire", (req, res) => {
+
+  const device = req.query.device;
+
   const db = loadDB();
-  res.json(db);
+
+  if (db.deviceLicenses[device]) {
+    db.deviceLicenses[device].expiresAt = Date.now() - 10000; // expired
+    saveDB(db);
+  }
+
+  res.json({ ok: true });
 });
 
 const PORT = 3000;
