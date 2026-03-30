@@ -140,19 +140,7 @@ app.get("/polar/success", (req, res) => {
 });
 
 
-app.get("/debug/expire", (req, res) => {
 
-  const device = req.query.device;
-
-  const db = loadDB();
-
-  if (db.deviceLicenses[device]) {
-    db.deviceLicenses[device].expiresAt = Date.now() - 10000; // expired
-    saveDB(db);
-  }
-
-  res.json({ ok: true });
-});
 
 const PORT = 3000;
 app.listen(PORT, () => console.log("StackTabs server running on port", PORT));
