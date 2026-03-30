@@ -139,5 +139,10 @@ app.get("/polar/success", (req, res) => {
   `);
 });
 
+app.get("/debug/db", (req, res) => {
+  const db = loadDB();
+  res.json(db);
+});
+
 const PORT = 3000;
 app.listen(PORT, () => console.log("StackTabs server running on port", PORT));
