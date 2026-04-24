@@ -57,6 +57,15 @@ app.get("/license/check", (req, res) => {
     expiresAt:record.expiresAt
   });
 });
+function activateLicense(db, device, event) {
+  let expiresAt = Date.now();
+
+  if (event.data?.current_period_end) {
+    expiresAt = new Date(event.data.current_period_end).getTime();
+  }
+
+  activateLicense(db, device, event);
+}
 
 /* ================= POLAR WEBHOOK (MOST IMPORTANT PART) ================= */
 
@@ -83,13 +92,29 @@ app.post("/polar/webhook", (req, res) => {
 
       const db = loadDB();
 
-      const device = db.emailToDevice?.[email];
+      let device = db.emailToDevice?.[email];
+
+
 
       console.log("EMAIL:", email);
       console.log("DEVICE FROM DB:", device);
 
       if (!device) {
-        console.log("❌ DEVICE NOT FOUND FROM EMAIL");
+        console.log("⚠️ Device not found, retrying...");
+      
+        // retry after 2 seconds
+        setTimeout(() => {
+          const dbRetry = loadDB();
+          const retryDevice = dbRetry.emailToDevice?.[email];
+      
+          if (!retryDevice) {
+            console.log("❌ STILL NOT FOUND AFTER RETRY");
+            return;
+          }
+      
+          activateLicense(dbRetry, retryDevice, event);
+        }, 2000);
+      
         return res.sendStatus(200);
       }
 
