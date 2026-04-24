@@ -75,7 +75,11 @@ app.post("/polar/webhook", (req, res) => {
     ) {
 
       // ✅ NEW LOGIC HERE
-      const email = event?.data?.customer?.email;
+      let email = event?.data?.customer?.email;
+
+      if (email) {
+        email = email.toLowerCase().trim();
+      }
 
       const db = loadDB();
 
@@ -112,7 +116,9 @@ app.post("/polar/webhook", (req, res) => {
 
 app.post("/save-device", (req, res) => {
 
-  const { device_id, email } = req.body;
+  let { device_id, email } = req.body;
+
+  email = email.toLowerCase().trim();
 
   console.log("SAVING DEVICE:", device_id, email);
 
