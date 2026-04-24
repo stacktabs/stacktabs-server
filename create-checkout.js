@@ -6,7 +6,11 @@ const CHECKOUT_LINK =
 
 router.get("/polar/create-checkout", (req, res) => {
 
-  const email = req.query.email;
+  let email = req.query.email;
+
+  if (email) {
+    email = email.toLowerCase().trim();
+  }
 
   if (!email) {
     return res.status(400).json({ error: "Missing email" });
