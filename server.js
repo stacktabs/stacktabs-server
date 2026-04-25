@@ -1,81 +1,92 @@
-
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
-
+const mongoose = require("mongoose");
 
 const app = express();
-const createCheckout = require("./create-checkout");
-app.use(cors({
-  origin: "*"
-}));
+
+app.use(cors({ origin: "*" }));
 app.use(express.json());
+
+const createCheckout = require("./create-checkout");
 app.use("/", createCheckout);
 
-
-
-/* ---------------- HEALTH ROUTE (CRITICAL FOR RENDER) ---------------- */
+/* ---------------- HEALTH ROUTE ---------------- */
 app.get("/", (req, res) => {
   res.send("StackTabs License Server Running");
 });
 
-/* ---------------- DATABASE ---------------- */
+/* ================= MONGODB ================= */
 
-const DB_FILE = "./licenses.json";
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.log("MongoDB error:", err));
 
-function loadDB() {
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({ deviceLicenses:{} }, null, 2));
-  }
-  return JSON.parse(fs.readFileSync(DB_FILE));
-}
+const LicenseSchema = new mongoose.Schema({
+  device: { type: String, unique: true },
+  email: String,
+  expiresAt: Number
+});
 
-function saveDB(db) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
+const License = mongoose.model("License", LicenseSchema);
 
 /* ================= LICENSE CHECK ================= */
 
-app.get("/license/check", (req, res) => {
+app.get("/license/check", async (req, res) => {
 
   const device = req.query.device;
-  if (!device) return res.json({ active:false });
+  if (!device) return res.json({ active: false });
 
-  const db = loadDB();
-  const record = db.deviceLicenses[device];
+  const record = await License.findOne({ device });
 
-  if (!record) return res.json({ active:false });
+  if (!record) {
+    console.log("❌ No record for device:", device);
+    return res.json({ active: false });
+  }
 
   if (Date.now() > record.expiresAt) {
-    delete db.deviceLicenses[device];
-    saveDB(db);
-    return res.json({ active:false });
+    console.log("❌ Subscription expired:", device);
+    return res.json({ active: false });
   }
+
+  console.log("✅ License valid:", device);
 
   res.json({
-    active:true,
-    expiresAt:record.expiresAt
+    active: true,
+    expiresAt: record.expiresAt
   });
 });
-function activateLicense(db, device, event) {
-  let expiresAt = Date.now();
 
-  if (event.data?.current_period_end) {
-    expiresAt = new Date(event.data.current_period_end).getTime();
+/* ================= SAVE DEVICE ================= */
+
+app.post("/save-device", async (req, res) => {
+
+  let { device_id, email } = req.body;
+
+  if (!device_id || !email) {
+    return res.status(400).json({ error: "Missing data" });
   }
 
-  activateLicense(db, device, event);
-}
+  email = email.toLowerCase().trim();
 
-/* ================= POLAR WEBHOOK (MOST IMPORTANT PART) ================= */
+  console.log("💾 SAVING DEVICE:", device_id, email);
 
-app.post("/polar/webhook", (req, res) => {
+  await License.updateOne(
+    { email },
+    { device: device_id },
+    { upsert: true }
+  );
+
+  res.json({ ok: true });
+});
+
+/* ================= POLAR WEBHOOK ================= */
+
+app.post("/polar/webhook", async (req, res) => {
 
   try {
-
     const event = req.body;
 
-    console.log("EVENT TYPE:", event.type);
+    console.log("📩 EVENT:", event.type);
 
     if (
       event.type === "subscription.created" ||
@@ -83,52 +94,36 @@ app.post("/polar/webhook", (req, res) => {
       event.type === "subscription.active"
     ) {
 
-      // ✅ NEW LOGIC HERE
       let email = event?.data?.customer?.email;
 
-      if (email) {
-        email = email.toLowerCase().trim();
-      }
-
-      const db = loadDB();
-
-      let device = db.emailToDevice?.[email];
-
-
-
-      console.log("EMAIL:", email);
-      console.log("DEVICE FROM DB:", device);
-
-      if (!device) {
-        console.log("⚠️ Device not found, retrying...");
-      
-        // retry after 2 seconds
-        setTimeout(() => {
-          const dbRetry = loadDB();
-          const retryDevice = dbRetry.emailToDevice?.[email];
-      
-          if (!retryDevice) {
-            console.log("❌ STILL NOT FOUND AFTER RETRY");
-            return;
-          }
-      
-          activateLicense(dbRetry, retryDevice, event);
-        }, 2000);
-      
+      if (!email) {
+        console.log("❌ No email in webhook");
         return res.sendStatus(200);
       }
 
-      let expiresAt = Date.now();
+      email = email.toLowerCase().trim();
 
-      if (event.data?.current_period_end) {
-        expiresAt = new Date(event.data.current_period_end).getTime();
+      const record = await License.findOne({ email });
+
+      if (!record) {
+        console.log("⚠️ Device not found for email:", email);
+
+        // retry after delay (race condition fix)
+        setTimeout(async () => {
+          const retryRecord = await License.findOne({ email });
+
+          if (!retryRecord) {
+            console.log("❌ STILL NOT FOUND:", email);
+            return;
+          }
+
+          await activateLicense(retryRecord.device, email, event);
+        }, 2000);
+
+        return res.sendStatus(200);
       }
 
-      db.deviceLicenses[device] = { expiresAt };
-
-      saveDB(db);
-
-      console.log("✅ PRO ACTIVATED:", device);
+      await activateLicense(record.device, email, event);
     }
 
     res.sendStatus(200);
@@ -139,23 +134,24 @@ app.post("/polar/webhook", (req, res) => {
   }
 });
 
-app.post("/save-device", (req, res) => {
+/* ================= LICENSE ACTIVATION ================= */
 
-  let { device_id, email } = req.body;
+async function activateLicense(device, email, event) {
 
-  email = email.toLowerCase().trim();
+  let expiresAt = Date.now();
 
-  console.log("SAVING DEVICE:", device_id, email);
+  if (event.data?.current_period_end) {
+    expiresAt = new Date(event.data.current_period_end).getTime();
+  }
 
-  const db = loadDB();
+  await License.updateOne(
+    { device },
+    { email, expiresAt },
+    { upsert: true }
+  );
 
-  db.emailToDevice = db.emailToDevice || {};
-  db.emailToDevice[email] = device_id;
-
-  saveDB(db);
-
-  res.json({ ok: true });
-});
+  console.log("✅ PRO ACTIVATED:", device);
+}
 
 /* ---------------- SUCCESS PAGE ---------------- */
 
@@ -170,8 +166,7 @@ app.get("/polar/success", (req, res) => {
   `);
 });
 
+/* ---------------- START SERVER ---------------- */
 
-
-
-const PORT = 3000;
-app.listen(PORT, () => console.log("StackTabs server running on port", PORT));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("🚀 Server running on port", PORT));
